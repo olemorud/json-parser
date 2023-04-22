@@ -1,31 +1,57 @@
+all:
 
-CC=gcc
-CFLAGS=-ggdb -Og
-CFLAGS+=-Wextra -Wall -Wpedantic
-#CFLAGS+=-fsanitize=address -fsanitize=undefined
-CFLAGS+=-fanalyzer
-CFLAGS+=-rdynamic
-CFLAGS+=-Iinclude
+BUILD ?= debug
+COMPILER ?= gcc
 
-LDFLAGS=
-LDLIBS=
+# ==== set compiler flags ====
+# credits Maxim Egorushkin:
+# https://stackoverflow.com/questions/48791883/best-practice-for-building-a-make-file/48793058#48793058
 
-_OBJS=main.o parse.o json_obj.o util.o
-OBJS=$(patsubst %,.obj/%,$(_OBJS))
+CC := gcc
 
-all: bin/parse
+LDFLAGS.debug :=
+LDFLAGS.release :=
+LDFLAGS := -g ${LDFLAGS.${BUILD}}
+LDLIBS :=
 
-bin/parse: $(OBJS) | bin
+# -fsanitize={address,undefined}
+CFLAGS.gcc.debug := -Og -ggdb -fanalyzer -DBACKTRACE -rdynamic
+CFLAGS.gcc.release := -O3 -march=native -DNDEBUG
+CFLAGS.gcc := ${CFLAGS.gcc.${BUILD}} -Iinclude -W{all,extra,error} -fstack-protector-all -std=gnu11
+
+CFLAGS.clang.debug=-O0 -ggdb -DBACKTRACE
+CFLAGS.clang.release=-O3 -march=native -DNDEBUG
+CFLAGS.clang=-Wextra -Wall -Wpedantic -fstack-protector-all ${CFLAGS.clang.${BUILD}}
+
+CFLAGS := ${CFLAGS.${COMPILER}}
+
+# ==== end set compiler flags ====
+
+BUILD_DIR := bin/${BUILD}
+
+OBJ_DIR := .obj/${BUILD}
+_OBJS := main.o parse.o json_obj.o util.o
+OBJS := $(patsubst %,$(OBJ_DIR)/%,$(_OBJS))
+
+
+all : $(BUILD_DIR)/parse
+
+$(BUILD_DIR)/parse : $(OBJS) | $(BUILD_DIR) Makefile
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) $(LDLIBS) -o $@
 
-.obj/main.o: src/main.c | .obj
+$(OBJ_DIR)/main.o : src/main.c | $(OBJ_DIR) Makefile
 	$(CC) $(CFLAGS) $(LDFLAGS) $(LDLIBS) -c $< -o $@
 
-.obj/%.o: src/%.c include/%.h | .obj
+$(OBJ_DIR)/%.o : src/%.c include/%.h | $(OBJ_DIR) Makefile
 	$(CC) $(CFLAGS) $(LDFLAGS) $(LDLIBS) -c $< -o $@
 
-bin:
+$(BUILD_DIR) :
 	mkdir -p $@
 
-.obj:
+$(OBJ_DIR) :
 	mkdir -p $@
+
+clean :
+	rm -rfi $(OBJ_DIR) $(BUILD_DIR)
+
+.PHONY : clean all

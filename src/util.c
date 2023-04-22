@@ -41,6 +41,7 @@ void* calloc_or_die(size_t nmemb, size_t size)
 // https://www.gnu.org/software/libc/manual/html_node/Backtraces.html
 void print_trace()
 {
+#ifdef BACKTRACE
     void* array[500];
     char** strings;
     int size, i;
@@ -55,4 +56,5 @@ void print_trace()
     }
 
     free(strings);
+#endif
 }
