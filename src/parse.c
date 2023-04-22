@@ -37,11 +37,21 @@ void print_array(struct json_value** arr, int cur_indent, int indent_amount);
         ungetc(c, fp);                                           \
     } while (0);
 
+/*
+   A JSON string is a sequence of zero or more Unicode characters, wrapped in
+   double quotes, using backslash escapes.
+
+   A character is represented as a single character JSON string. A JSON string
+   is very much like a C or Java string.
+
+   Consumes a JSON string from a file stream and returns a corresponding char*
+*/
 char* read_string(FILE* fp)
 {
     int c;
     size_t i = 0, result_size = 16 * sizeof(char);
     char* result = malloc_or_die(result_size);
+    bool escaped = false;
 
     while (true) {
         if (i + 1 >= result_size) {
@@ -49,17 +59,23 @@ char* read_string(FILE* fp)
             result = realloc_or_die(result, result_size);
         }
 
+        if (escaped) {
+            result[i++] = 'c';
+            escaped = false;
+            continue;
+        }
+
         switch (c = fgetc(fp)) {
         default:
             result[i++] = c;
             break;
 
+        case '\\':
+            escaped = true;
+            // intentional fallthrough
         case '"':
             result[i++] = '\0';
             return realloc_or_die(result, i);
-
-        case '\\':
-            break;
 
         case EOF:
             err(EARLY_EOF, "(%s) unexpected EOF", __func__);
@@ -158,12 +174,12 @@ struct json_value** read_array(FILE* fp)
     struct json_value** output = malloc_or_die(output_size);
 
     while (true) {
-
         if (i > output_size) {
             output_size *= 2;
             output = realloc_or_die(output, output_size);
         }
 
+        discard_whitespace(fp);
         c = fgetc(fp);
 
         switch (c) {
@@ -232,14 +248,15 @@ bool read_boolean(FILE* fp)
     if (n_read != sizeof(f))
         exit(EXIT_FAILURE);
 
-    if (strncmp(buf, t, sizeof(t)) == 0)
+    if (strncmp(buf, t, sizeof(t)) == 0) {
+        ungetc(buf[4], fp);
         return true;
+    }
 
     if (strncmp(buf, f, sizeof(f)) == 0)
         return false;
 
-    errx(UNEXPECTED_CHAR, "(%s) unexpected symbol at index %zu", __func__,
-        ftell(fp) - n_read);
+    errx(UNEXPECTED_CHAR, "(%s) unexpected symbol at index %zu", __func__, ftell(fp) - n_read);
 }
 
 // TODO: fix int overflow
