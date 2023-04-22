@@ -1,11 +1,10 @@
 
 #include "parse.h"
 
-#include <ctype.h> // isalpha
-#include <err.h> // err, warn
-#include <errno.h>
-#include <stdlib.h> // EXIT_SUCCESS, EXIT_FAILURE
-#include <string.h> // strdup
+#include <ctype.h> // isspace, isdigit
+#include <err.h> // err, errx
+#include <stdlib.h> // exit, EXIT_SUCCESS, EXIT_FAILURE
+#include <string.h> // strcmp
 
 #include "json_obj.h"
 #include "util.h"
