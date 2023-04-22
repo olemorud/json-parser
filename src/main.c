@@ -4,13 +4,17 @@
 #include "util.h"
 
 #include <stdlib.h> // atexit
-#include <unistd.h> // _exit
+#include <err.h> // errx
 
-int main()
+int main(int argc, char* argv[])
 {
+	if (argc != 2) {
+		errx(EXIT_FAILURE, "Usage: %s <file>", argv[0]);
+	}
+
     atexit(print_trace);
 
-    FILE* fp = fopen("sample.json", "r");
+    FILE* fp = fopen(argv[1], "r");
 
     volatile struct json_value x = parse_json_value(fp);
 

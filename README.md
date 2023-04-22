@@ -2,7 +2,7 @@
 # C JSON Parser
 
 Just a simple project to practice writing parsers.
-Not guaranteed to be safe or efficient.
+Not guaranteed to be safe, reliable or efficient.
 
 ## Usage
 
@@ -16,7 +16,7 @@ To make a debug build just run `make`.
 ### Run
 
 ```sh
-./bin/{release|debug}/json_parser
+./bin/{release|debug}/json_parser sample.json
 ```
 
 ## Limitations
