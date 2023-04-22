@@ -275,6 +275,9 @@ double read_number(FILE* fp)
 }
 
 /*
+    Consumes the next JSON value in a file stream and returns a
+        corresponding json_value
+
     A JSON value can be a JSON string in double quotes, or a JSON number,
     or true or false or null, or a JOSN object or a JSON array.
     These structures can be nested.

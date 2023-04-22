@@ -3,14 +3,14 @@
 #include "parse.h"
 #include "util.h"
 
-#include <stdlib.h> // atexit
 #include <err.h> // errx
+#include <stdlib.h> // atexit
 
 int main(int argc, char* argv[])
 {
-	if (argc != 2) {
-		errx(EXIT_FAILURE, "Usage: %s <file>", argv[0]);
-	}
+    if (argc != 2) {
+        errx(EXIT_FAILURE, "Usage: %s <file>", argv[0]);
+    }
 
     atexit(print_trace);
 

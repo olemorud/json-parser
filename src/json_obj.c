@@ -8,8 +8,24 @@
 #include "json_obj.h"
 #include "util.h"
 
-/*  djb2 string hash
-    credits: Daniel J. Bernstein */
+/*
+    djb2 string hash
+    credits: Daniel J. Bernstein
+
+        Returns a hash of the string `str`.
+
+        It seems to work well because 33 is coprime to
+        2^32 and 2^64 (any odd number except 1 is),
+        which probably improves the distribution
+        (I'm not a mathematician so I can't prove it this).
+        Multiplying a number n by 33 is the same as
+        bitshifting by 5 and adding n, which is faster
+        than multiplying by, say, 37.  Maybe any 2^x±1
+        are equally good.
+
+        5381 is a large-ish prime number which are used
+        as multipliers in most hash algorithms.
+*/
 size_t obj_hash(char const* str)
 {
     size_t hash = 5381;
@@ -21,7 +37,8 @@ size_t obj_hash(char const* str)
     return hash % OBJ_SIZE;
 }
 
-/* Value at index `key`
+/*
+   Value at index `key`
 
    m   - obj to retrieve from
    key - index to read
@@ -40,7 +57,8 @@ void* obj_at(obj_t m, char* const key)
     return hit ? hit->val : NULL;
 }
 
-/* Insert `value` at index `key`
+/*
+   Insert `value` at index `key`
 
    m        - obj to insert to
    key      - key to insert at
@@ -48,7 +66,8 @@ void* obj_at(obj_t m, char* const key)
    val_size - size of value in bytes
 
    returns true if successful
-   returns false if key already exists */
+   returns false if key already exists
+*/
 bool obj_insert(obj_t m, char* const key, struct json_value* value)
 {
     size_t i = obj_hash(key);
@@ -87,7 +106,11 @@ bool obj_insert(obj_t m, char* const key, struct json_value* value)
     return true;
 }
 
-/* Free memory allocated for obj */
+/*
+        Free memory allocated for obj
+
+TODO: recurively delete children objects
+*/
 void obj_delete(obj_t m)
 {
     for (size_t i = 0; i < OBJ_SIZE; i++) {
