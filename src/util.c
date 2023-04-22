@@ -50,7 +50,7 @@ void print_trace()
     strings = backtrace_symbols(array, size);
 
     if (strings != NULL) {
-        printf("Obtained %d stack frames.\n", size);
+        printf("\n\n=== Obtained %d stack frames. === \n", size);
         for (i = 0; i < size; i++)
             printf("%s\n", strings[i]);
     }
