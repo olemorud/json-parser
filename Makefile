@@ -9,11 +9,6 @@ COMPILER ?= gcc
 
 CC := gcc
 
-LDFLAGS.debug :=
-LDFLAGS.release :=
-LDFLAGS := -g ${LDFLAGS.${BUILD}}
-LDLIBS :=
-
 # -fsanitize={address,undefined}
 CFLAGS.gcc.debug := -Og -ggdb -fanalyzer -DBACKTRACE -rdynamic
 CFLAGS.gcc.release := -O3 -march=native -DNDEBUG
