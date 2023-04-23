@@ -443,18 +443,20 @@ void print_array(struct json_value** arr, int cur_indent, int indent_amount)
 {
     putchar('[');
 
+    if(arr[0] == NULL) {
+        putchar(']');
+        return;
+    }
+
     size_t i;
 
-    for (i = 0; arr[i + 1] != NULL; i++) {
+    for (i = 0; arr[i+1] != NULL; i++) {
         putchar('\n');
         add_indent(cur_indent);
         print_json_value(*arr[i], cur_indent + indent_amount, indent_amount);
-        putchar(',');
+        if( arr[i+1] != NULL )
+            putchar(',');
     }
-
-    putchar('\n');
-    add_indent(cur_indent);
-    print_json_value(*arr[i], cur_indent + indent_amount, indent_amount);
 
     putchar('\n');
     add_indent(cur_indent - indent_amount * 2);
@@ -469,7 +471,7 @@ void print_json_value(struct json_value val, int cur_indent,
         printf("\"%s\"", val.string);
         break;
     case number:
-        printf("%zu", val.number);
+        printf("%lf", val.number);
         break;
     case boolean:
         printf("%s", val.boolean ? "true" : "false");

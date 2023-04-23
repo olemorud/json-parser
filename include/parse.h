@@ -21,7 +21,7 @@ struct json_value {
         struct json_value** array;
         char* string;
         bool boolean;
-        int64_t number;
+        double number;
     };
 };
 
