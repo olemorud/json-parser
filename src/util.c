@@ -19,12 +19,19 @@ void* malloc_or_die(size_t size)
 
 void* realloc_or_die(void* ptr, size_t size)
 {
-    ptr = realloc(ptr, size);
+    void* tmp = realloc(ptr, size);
 
-    if (ptr == NULL)
-        err(errno, "realloc_or_die failed");
+    if (ptr == NULL) {
+        if (errno != 0) {
+            free(ptr);
+            err(errno, "realloc_or_die failed");
+        }
 
-    return ptr;
+        fprintf(stderr, "\nrealloc_or_die returned NULL, ptr: %p size: %zu\n", ptr, size);
+        exit(EXIT_FAILURE);
+    }
+
+    return tmp;
 }
 
 void* calloc_or_die(size_t nmemb, size_t size)
