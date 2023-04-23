@@ -26,24 +26,29 @@ double read_number(FILE* fp);
 struct json_value** read_array(FILE* fp);
 void err_ctx(int exit_code, FILE* fp, const char* format, ...);
 
-
 void print_object(obj_t obj, int cur_indent, int indent_amount);
 void print_json_value(struct json_value val, int cur_indent, int indent_amount);
 void print_array(struct json_value** arr, int cur_indent, int indent_amount);
 
 // define as a macro to make debugging smoother
-#define discard_whitespace(fp)                                   \
-    do {                                                         \
-        int c;                                                   \
-        while (isspace(c = fgetc(fp))) {                         \
-            if (c == EOF)                                        \
-                err(EARLY_EOF, "(%s) unexpected EOF", __func__); \
-        }                                                        \
-        ungetc(c, fp);                                           \
+#define discard_whitespace(fp)                                           \
+    do {                                                                 \
+        int c;                                                           \
+        while (isspace(c = fgetc(fp))) {                                 \
+            if (c == EOF)                                                \
+                err_ctx(EARLY_EOF, fp, "(%s) unexpected EOF", __func__); \
+        }                                                                \
+        ungetc(c, fp);                                                   \
     } while (0);
 
 /*
-    Prints parser errors with surrounding context.
+    Prints parser errors with surrounding context and
+	terminates the program.
+
+	exit_code - code to exit with
+	fp        - file causing parser errors
+	format    - error message format string
+	...       - format string arguments
 */
 __attribute__((__noreturn__))
 void err_ctx(int exit_code, FILE* fp, const char* format, ...)
@@ -57,13 +62,13 @@ void err_ctx(int exit_code, FILE* fp, const char* format, ...)
     va_end(args);
 
     if(fseek(fp, -(ERROR_CONTEXT_LEN/2), SEEK_CUR) == 0) {
-        fread(context, sizeof(char), ERROR_CONTEXT_LEN, fp);
+        size_t n_read = fread(context, sizeof(char), ERROR_CONTEXT_LEN, fp);
 
         fprintf(stderr, "\ncontext:\n");
 
         int arrow_offset = 0;
-        int i;
-        for (i = 0; i < ERROR_CONTEXT_LEN/2; i++) {
+        size_t i;
+        for (i = 0; i < ERROR_CONTEXT_LEN/2 && i < n_read; i++) {
             switch (context[i]) {
             case '\n':
                 fprintf(stderr, "\\n");
@@ -84,7 +89,7 @@ void err_ctx(int exit_code, FILE* fp, const char* format, ...)
             }
         }
 
-        for (; i < ERROR_CONTEXT_LEN; i++) {
+        for (; i < ERROR_CONTEXT_LEN && i < n_read; i++) {
             switch (context[i]) {
             case '\n':
                 fprintf(stderr, "\\n");
@@ -138,19 +143,19 @@ char* read_string(FILE* fp)
         }
 
         switch (c = fgetc(fp)) {
+        case '\\':
+            escaped = true;
+            result[i++] = c;
+            break;
         default:
             result[i++] = c;
             break;
-
-        case '\\':
-            escaped = true;
-            // intentional fallthrough
         case '"':
             result[i++] = '\0';
             return realloc_or_die(result, i);
 
         case EOF:
-            err(EARLY_EOF, "(%s) unexpected EOF", __func__);
+            err_ctx(EARLY_EOF, fp, "(%s) unexpected EOF", __func__);
         }
     }
 }
@@ -174,7 +179,7 @@ obj_t* read_object(FILE* fp)
 
         switch (fgetc(fp)) {
         case EOF:
-            err(EARLY_EOF, "(%s) unexpected EOF", __func__);
+            err_ctx(EARLY_EOF, fp, "(%s) unexpected EOF", __func__);
 
         default:
             err_ctx(UNEXPECTED_CHAR, fp, "(%s) expected \"", __func__);
@@ -195,7 +200,7 @@ obj_t* read_object(FILE* fp)
             break;
 
         case EOF:
-            err(EARLY_EOF, "(%s) unexpected EOF", __func__);
+            err_ctx(EARLY_EOF, fp, "(%s) unexpected EOF", __func__);
 
         default:
             err_ctx(UNEXPECTED_CHAR, fp, "(%s) expected ':'", __func__);
@@ -216,7 +221,7 @@ obj_t* read_object(FILE* fp)
 
         switch (fgetc(fp)) {
         case EOF:
-            err(EARLY_EOF, "(%s) unexpected EOF", __func__);
+            err_ctx(EARLY_EOF, fp, "(%s) unexpected EOF", __func__);
 
         case ',':
             continue;
@@ -256,7 +261,7 @@ struct json_value** read_array(FILE* fp)
 
         switch (c) {
         case EOF:
-            err(EARLY_EOF, "(%s) unexpected EOF", __func__);
+            err_ctx(EARLY_EOF, fp, "(%s) unexpected EOF", __func__);
 
         case ']':
             output[i] = NULL;
@@ -290,7 +295,7 @@ void read_null(FILE* fp)
     size_t n_read = fread(buf, sizeof(char), sizeof(ok), fp);
 
     if (n_read != sizeof(ok))
-        err(EXIT_FAILURE, "(%s) read failure", __func__);
+        err_ctx(EXIT_FAILURE, fp, "(%s) read failure", __func__);
 
     if (strncmp(buf, ok, sizeof(ok)) != 0)
         err_ctx(UNEXPECTED_CHAR, fp, "(%s) unexpected symbol", __func__);
@@ -316,7 +321,7 @@ bool read_boolean(FILE* fp)
         exit(EXIT_FAILURE);
 
     if (strncmp(buf, t, sizeof(t)) == 0) {
-        ungetc(buf[4], fp);
+        ungetc('e', fp);
         return true;
     }
 
@@ -360,7 +365,7 @@ struct json_value parse_json_value(FILE* fp)
 
     switch (c) {
     case EOF:
-        err(EARLY_EOF, "(%s) unexpected EOF", __func__);
+        err_ctx(EARLY_EOF, fp, "(%s) unexpected EOF", __func__);
 
     case '{':
         result.type = object;
