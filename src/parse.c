@@ -5,6 +5,8 @@
 #include <err.h> // err, errx
 #include <stdlib.h> // exit, EXIT_SUCCESS, EXIT_FAILURE
 #include <string.h> // strcmp
+#include <stdarg.h> // va_list
+#include <stdio.h>
 
 #include "json_obj.h"
 #include "util.h"
@@ -13,6 +15,8 @@
 #define MALLOC_DIE 201
 #define UNEXPECTED_CHAR 200
 
+#define ERROR_CONTEXT_LEN 40
+
 char* read_string(FILE* fp);
 obj_t* read_object(FILE* fp);
 void discard_whitespace(FILE* fp);
@@ -20,6 +24,8 @@ bool read_boolean(FILE* fp);
 void read_null(FILE* fp);
 double read_number(FILE* fp);
 struct json_value** read_array(FILE* fp);
+void err_ctx(int exit_code, FILE* fp, const char* format, ...);
+
 
 void print_object(obj_t obj, int cur_indent, int indent_amount);
 void print_json_value(struct json_value val, int cur_indent, int indent_amount);
@@ -35,6 +41,73 @@ void print_array(struct json_value** arr, int cur_indent, int indent_amount);
         }                                                        \
         ungetc(c, fp);                                           \
     } while (0);
+
+/*
+    Prints parser errors with surrounding context.
+*/
+__attribute__((__noreturn__))
+void err_ctx(int exit_code, FILE* fp, const char* format, ...)
+{
+    va_list args;
+    static char context[ERROR_CONTEXT_LEN];
+
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    fprintf(stderr, " (at index %zu)\n", ftell(fp));
+    va_end(args);
+
+    if(fseek(fp, -(ERROR_CONTEXT_LEN/2), SEEK_CUR) == 0) {
+        fread(context, sizeof(char), ERROR_CONTEXT_LEN, fp);
+
+        fprintf(stderr, "\ncontext:\n");
+
+        int arrow_offset = 0;
+        int i;
+        for (i = 0; i < ERROR_CONTEXT_LEN/2; i++) {
+            switch (context[i]) {
+            case '\n':
+                fprintf(stderr, "\\n");
+                arrow_offset += 2;
+                break;
+            case '\r':
+                fprintf(stderr, "\\r");
+                arrow_offset += 2;
+                break;
+            case '\t':
+                fprintf(stderr, "\\t");
+                arrow_offset += 2;
+                break;
+            default:
+                fputc(context[i], stderr);
+                arrow_offset += 1;
+                break;
+            }
+        }
+
+        for (; i < ERROR_CONTEXT_LEN; i++) {
+            switch (context[i]) {
+            case '\n':
+                fprintf(stderr, "\\n");
+                break;
+            case '\t':
+                fprintf(stderr, "\\t");
+                break;
+            default:
+                fputc(context[i], stderr);
+                break;
+            }
+        }
+
+        fputc('\n', stderr);
+        for (int i = 0; i < arrow_offset - 2; i++)
+            fputc(' ', stderr);
+
+        fputc('^', stderr);
+        fputc('\n', stderr);
+    }
+
+    exit(exit_code);
+}
 
 /*
    A JSON string is a sequence of zero or more Unicode characters, wrapped in
@@ -104,7 +177,7 @@ obj_t* read_object(FILE* fp)
             err(EARLY_EOF, "(%s) unexpected EOF", __func__);
 
         default:
-            errx(UNEXPECTED_CHAR, "(%s) expected \" at index %zu", __func__, ftell(fp));
+            err_ctx(UNEXPECTED_CHAR, fp, "(%s) expected \"", __func__);
 
         case '"':
             key = read_string(fp);
@@ -125,7 +198,7 @@ obj_t* read_object(FILE* fp)
             err(EARLY_EOF, "(%s) unexpected EOF", __func__);
 
         default:
-            errx(UNEXPECTED_CHAR, "(%s) expected ':' at index %zu", __func__, ftell(fp));
+            err_ctx(UNEXPECTED_CHAR, fp, "(%s) expected ':'", __func__);
         }
 
         /* read value */
@@ -136,7 +209,7 @@ obj_t* read_object(FILE* fp)
 
         /* insert key-value pair to obj */
         if (!obj_insert(*result, key, val))
-            err(EXIT_FAILURE, "failed to insert pair (%s, %p)", key, (void*)val);
+            errx(EXIT_FAILURE, "failed to insert pair (%s, %p)", key, (void*)val);
 
         /* read separator or end of object */
         discard_whitespace(fp);
@@ -152,7 +225,7 @@ obj_t* read_object(FILE* fp)
             return result;
 
         default:
-            errx(UNEXPECTED_CHAR, "(%s) expected ',' or '}' at index %zu", __func__, ftell(fp));
+            err_ctx(UNEXPECTED_CHAR, fp, "(%s) expected ',' or '}'", __func__);
         }
     }
 
@@ -173,7 +246,7 @@ struct json_value** read_array(FILE* fp)
     struct json_value** output = malloc_or_die(output_size);
 
     while (true) {
-        if (i > output_size) {
+        if (i+1 >= output_size) {
             output_size *= 2;
             output = realloc_or_die(output, output_size);
         }
@@ -201,10 +274,6 @@ struct json_value** read_array(FILE* fp)
 
         i++;
     }
-
-    output[i] = NULL;
-
-    return realloc_or_die(output, i * sizeof(void*));
 }
 
 /*
@@ -221,11 +290,10 @@ void read_null(FILE* fp)
     size_t n_read = fread(buf, sizeof(char), sizeof(ok), fp);
 
     if (n_read != sizeof(ok))
-        err(EXIT_FAILURE, "(%s) read failure at index %zu", __func__, ftell(fp));
+        err(EXIT_FAILURE, "(%s) read failure", __func__);
 
     if (strncmp(buf, ok, sizeof(ok)) != 0)
-        errx(UNEXPECTED_CHAR, "(%s) unexpected symbol at index %zu", __func__,
-            ftell(fp));
+        err_ctx(UNEXPECTED_CHAR, fp, "(%s) unexpected symbol", __func__);
 }
 
 /*
@@ -255,7 +323,8 @@ bool read_boolean(FILE* fp)
     if (strncmp(buf, f, sizeof(f)) == 0)
         return false;
 
-    errx(UNEXPECTED_CHAR, "(%s) unexpected symbol at index %zu", __func__, ftell(fp) - n_read);
+    fseek(fp, -sizeof(f), SEEK_CUR);
+    err_ctx(UNEXPECTED_CHAR, fp, "(%s) unexpected symbol", __func__, ftell(fp));
 }
 
 // TODO: fix int overflow
@@ -327,7 +396,8 @@ struct json_value parse_json_value(FILE* fp)
             result.type = number;
             result.number = read_number(fp);
         } else {
-            errx(UNEXPECTED_CHAR, "(%s) unexpected symbol %c at index %zu", __func__, c, ftell(fp) - 1);
+            ungetc(c, fp);
+            err_ctx(UNEXPECTED_CHAR, fp, "(%s) unexpected symbol %c", __func__, c);
         }
     }
 
