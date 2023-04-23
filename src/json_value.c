@@ -5,8 +5,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "json_obj.h"
+#include "json_value.h"
 #include "util.h"
+
+bool obj_insert(obj_t m, char* const key, struct json_value* value);
+size_t obj_hash(char const* str);
+void obj_delete(obj_t m);
+void print_array(struct json_value** arr, int cur_indent, int indent_amount);
+void print_json_value(struct json_value val, int cur_indent, int indent_amount);
+void print_object(obj_t obj, int cur_indent, int indent_amount);
+void* obj_at(obj_t m, char* const key);
 
 /*
     djb2 string hash
@@ -127,4 +135,94 @@ void obj_delete(obj_t m)
             free(tmp);
         }
     }
+}
+
+void add_indent(int n)
+{
+    for (int i = 0; i < n; i++)
+        putchar(' ');
+}
+
+void print_object(obj_t obj, int cur_indent, int indent_amount)
+{
+    putchar('{');
+
+    bool first = true;
+
+    for (size_t i = 0; i < OBJ_SIZE; i++) {
+        struct obj_entry* e = obj[i];
+
+        while (e != NULL) {
+            if (!first)
+                putchar(',');
+
+            first = false;
+
+            putchar('\n');
+            add_indent(cur_indent);
+            printf("\"%s\": ", e->key);
+            print_json_value(*(e->val), cur_indent + indent_amount, indent_amount);
+
+            e = e->next;
+        }
+    }
+
+    putchar('\n');
+    add_indent(cur_indent - indent_amount * 2);
+    putchar('}');
+}
+
+void print_array(struct json_value** arr, int cur_indent, int indent_amount)
+{
+    putchar('[');
+
+    if (arr[0] == NULL) {
+        putchar(']');
+        return;
+    }
+
+    for (size_t i = 0; arr[i+1] != NULL; i++) {
+        putchar('\n');
+        add_indent(cur_indent);
+        print_json_value(*arr[i], cur_indent + indent_amount, indent_amount);
+
+        if (arr[i + 1] != NULL)
+            putchar(',');
+    }
+
+    putchar('\n');
+    add_indent(cur_indent - indent_amount * 2);
+    putchar(']');
+}
+
+void print_json_value(struct json_value val, int cur_indent,
+    int indent_amount)
+{
+    switch (val.type) {
+    case string:
+        printf("\"%s\"", val.string);
+        break;
+    case number:
+        printf("%lf", val.number);
+        break;
+    case boolean:
+        printf("%s", val.boolean ? "true" : "false");
+        break;
+    case null:
+        printf("null");
+        break;
+    case object:
+        print_object(*val.object, cur_indent + indent_amount, indent_amount);
+        break;
+    case array:
+        print_array(val.array, cur_indent + indent_amount, indent_amount);
+        break;
+    default:
+        printf("<unknown>");
+    }
+}
+
+void print_json(struct json_value val, int indent)
+{
+    print_json_value(val, 0, indent);
 }

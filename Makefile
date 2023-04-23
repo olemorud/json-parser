@@ -10,22 +10,24 @@ COMPILER ?= gcc
 CC := gcc
 
 # -fsanitize={address,undefined}
-CFLAGS.gcc.debug := -Og -ggdb -fanalyzer -DBACKTRACE -rdynamic
+CFLAGS.gcc.debug := -Og -ggdb -fanalyzer -DBACKTRACE -rdynamic -fsanitize=address
 CFLAGS.gcc.release := -O3 -march=native -DNDEBUG
 CFLAGS.gcc := ${CFLAGS.gcc.${BUILD}} -Iinclude -W{all,extra,error} -fstack-protector-all -std=gnu11
 
-CFLAGS.clang.debug=-O0 -ggdb -DBACKTRACE
+CFLAGS.clang.debug=-O0 -g3 -DBACKTRACE -rdynamic
 CFLAGS.clang.release=-O3 -march=native -DNDEBUG
 CFLAGS.clang=-Wextra -Wall -Wpedantic -fstack-protector-all ${CFLAGS.clang.${BUILD}}
 
 CFLAGS := ${CFLAGS.${COMPILER}}
+
+LD_PRELOAD:=
 
 # ==== end set compiler flags ====
 
 BUILD_DIR := bin/${BUILD}
 
 OBJ_DIR := .obj/${BUILD}
-_OBJS := main.o parse.o json_obj.o util.o
+_OBJS := main.o parse.o json_value.o util.o
 OBJS := $(patsubst %,$(OBJ_DIR)/%,$(_OBJS))
 
 

@@ -1,11 +1,14 @@
 
 #include "util.h"
 
-#include <err.h>
-#include <errno.h>
-#include <execinfo.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <err.h> // err
+#include <errno.h> // errno
+#include <execinfo.h> // backtrace
+#include <stdarg.h> // va_list
+#include <stdio.h> // fprintf
+#include <stdlib.h> // malloc, realloc, calloc
+
+#define ERROR_CONTEXT_LEN 80
 
 void* malloc_or_die(size_t size)
 {
@@ -27,7 +30,7 @@ void* realloc_or_die(void* ptr, size_t size)
             err(errno, "realloc_or_die failed");
         }
 
-        fprintf(stderr, "\nrealloc_or_die returned NULL, ptr: %p size: %zu\n", ptr, size);
+        fprintf(stderr, "\nrealloc_or_die returned NULL but errno is 0, ptr: %p size: %zu\n", ptr, size);
         exit(EXIT_FAILURE);
     }
 
@@ -64,4 +67,77 @@ void print_trace()
 
     free(strings);
 #endif
+}
+
+/*
+    Prints parser errors with surrounding context and
+        terminates the program.
+
+        exit_code - code to exit with
+        fp        - file causing parser errors
+        format    - error message format string
+        ...       - format string arguments
+*/
+__attribute__((__noreturn__)) void err_ctx(int exit_code, FILE* fp, const char* format, ...)
+{
+    va_list args;
+    static char context[ERROR_CONTEXT_LEN];
+
+    va_start(args, format);
+    fputc('\n', stderr);
+    vfprintf(stderr, format, args);
+    fprintf(stderr, " (at index %zu)\n", ftell(fp));
+    va_end(args);
+
+    if (fseek(fp, -(ERROR_CONTEXT_LEN / 2), SEEK_CUR) == 0) {
+        size_t n_read = fread(context, sizeof(char), ERROR_CONTEXT_LEN, fp);
+
+        fprintf(stderr, "\ncontext:\n");
+
+        int arrow_offset = 0;
+        size_t i;
+        for (i = 0; i < ERROR_CONTEXT_LEN / 2 && i < n_read; i++) {
+            switch (context[i]) {
+            case '\n':
+                fprintf(stderr, "\\n");
+                arrow_offset += 2;
+                break;
+            case '\r':
+                fprintf(stderr, "\\r");
+                arrow_offset += 2;
+                break;
+            case '\t':
+                fprintf(stderr, "\\t");
+                arrow_offset += 2;
+                break;
+            default:
+                fputc(context[i], stderr);
+                arrow_offset += 1;
+                break;
+            }
+        }
+
+        for (; i < ERROR_CONTEXT_LEN && i < n_read; i++) {
+            switch (context[i]) {
+            case '\n':
+                fprintf(stderr, "\\n");
+                break;
+            case '\t':
+                fprintf(stderr, "\\t");
+                break;
+            default:
+                fputc(context[i], stderr);
+                break;
+            }
+        }
+
+        fputc('\n', stderr);
+        for (int i = 0; i < arrow_offset - 2; i++)
+            fputc(' ', stderr);
+
+        fputc('^', stderr);
+        fputc('\n', stderr);
+    }
+
+    exit(exit_code);
 }
