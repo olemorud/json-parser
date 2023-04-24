@@ -10,11 +10,12 @@
 
 bool obj_insert(obj_t m, char* const key, struct json_value* value);
 size_t obj_hash(char const* str);
-void obj_delete(obj_t m);
+void obj_delete(obj_t* m);
+void* obj_at(obj_t m, char* const key);
+
 void print_array(struct json_value** arr, int cur_indent, int indent_amount);
 void print_json_value(struct json_value val, int cur_indent, int indent_amount);
 void print_object(obj_t obj, int cur_indent, int indent_amount);
-void* obj_at(obj_t m, char* const key);
 
 /*
     djb2 string hash
@@ -104,7 +105,7 @@ bool obj_insert(obj_t m, char* const key, struct json_value* value)
 
     /* populate new entry */
     cur = malloc_or_die(sizeof(struct obj_entry));
-    cur->key = strdup(key);
+    cur->key = key;
     cur->val = value;
     cur->next = m[i];
 
@@ -114,27 +115,52 @@ bool obj_insert(obj_t m, char* const key, struct json_value* value)
     return true;
 }
 
+void json_value_delete(struct json_value val)
+{
+    switch (val.type) {
+    case array:
+        for (size_t i = 0; val.array[i] != NULL; i++) {
+            json_value_delete(*(val.array[i]));
+            free(val.array[i]);
+        }
+
+        free(val.array);
+        break;
+
+    case object:
+        obj_delete(val.object);
+        break;
+
+    case string:
+        free(val.string);
+        break;
+
+    default:
+        break;
+    }
+}
+
 /*
-        Free memory allocated for obj
+    Free memory allocated for obj
 
 TODO: recurively delete children objects
 */
-void obj_delete(obj_t m)
+void obj_delete(obj_t* m)
 {
     for (size_t i = 0; i < OBJ_SIZE; i++) {
-        if (m[i] == NULL)
-            continue;
-
-        struct obj_entry *e = m[i], *tmp;
+        struct obj_entry *e = (*m)[i], *tmp;
 
         while (e != NULL) {
-            tmp = e;
+            json_value_delete(*(e->val));
             free((char*)e->key);
             free(e->val);
+
+            tmp = e;
             e = e->next;
             free(tmp);
         }
     }
+    free(m);
 }
 
 void add_indent(int n)
@@ -181,7 +207,7 @@ void print_array(struct json_value** arr, int cur_indent, int indent_amount)
         return;
     }
 
-    for (size_t i = 0; arr[i+1] != NULL; i++) {
+    for (size_t i = 0; arr[i + 1] != NULL; i++) {
         putchar('\n');
         add_indent(cur_indent);
         print_json_value(*arr[i], cur_indent + indent_amount, indent_amount);

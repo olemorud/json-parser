@@ -16,9 +16,13 @@ int main(int argc, char* argv[])
 
     FILE* fp = fopen(argv[1], "r");
 
-    volatile struct json_value x = parse_json_value(fp);
+    struct json_value x = parse_json_value(fp);
 
-    print_json(x, 1);
+    // print_json(x, 1);
+
+    json_value_delete(x);
+
+    fclose(fp);
 
     return EXIT_SUCCESS;
 }

@@ -113,7 +113,7 @@ struct json_value parse_json_value(FILE* fp)
 char* read_string(FILE* fp)
 {
     int c;
-    size_t i = 0, result_size = 16 * sizeof(char);
+    size_t i = 0, result_size = 16;
     char* result = malloc_or_die(result_size);
 
     bool escaped = false;
@@ -141,6 +141,7 @@ char* read_string(FILE* fp)
                 return realloc_or_die(result, i);
 
             case EOF:
+                free(result);
                 err_ctx(EARLY_EOF, fp, "(%s) unexpected EOF", __func__);
 
             default:
@@ -170,9 +171,11 @@ obj_t* read_object(FILE* fp)
 
         switch (fgetc(fp)) {
         case EOF:
+            free(result);
             err_ctx(EARLY_EOF, fp, "(%s) unexpected EOF", __func__);
 
         default:
+            free(result);
             err_ctx(UNEXPECTED_CHAR, fp, "(%s) expected \"", __func__);
 
         case '"':
@@ -191,9 +194,11 @@ obj_t* read_object(FILE* fp)
             break;
 
         case EOF:
+            free(result);
             err_ctx(EARLY_EOF, fp, "(%s) unexpected EOF", __func__);
 
         default:
+            free(result);
             err_ctx(UNEXPECTED_CHAR, fp, "(%s) expected ':'", __func__);
         }
 
@@ -204,14 +209,19 @@ obj_t* read_object(FILE* fp)
         *val = parse_json_value(fp);
 
         /* insert key-value pair to obj */
-        if (!obj_insert(*result, key, val))
+        if (!obj_insert(*result, key, val)) {
+            free(result);
+            free(val);
             errx(EXIT_FAILURE, "failed to insert pair (%s, %p)", key, (void*)val);
+        }
 
         /* read separator or end of object */
         discard_whitespace(fp);
 
         switch (fgetc(fp)) {
         case EOF:
+            free(val);
+            free(result);
             err_ctx(EARLY_EOF, fp, "(%s) unexpected EOF", __func__);
 
         case ',':
@@ -221,6 +231,8 @@ obj_t* read_object(FILE* fp)
             return result;
 
         default:
+            free(val);
+            free(result);
             err_ctx(UNEXPECTED_CHAR, fp, "(%s) expected ',' or '}'", __func__);
         }
     }
@@ -252,6 +264,11 @@ struct json_value** read_array(FILE* fp)
 
         switch (c) {
         case EOF:
+            free(output);
+
+            for (size_t j = 0; j < i; j++)
+                free(output[j]);
+
             err_ctx(EARLY_EOF, fp, "(%s) unexpected EOF", __func__);
             break;
 
@@ -281,7 +298,7 @@ struct json_value** read_array(FILE* fp)
 void read_null(FILE* fp)
 {
     static const char ok[] = { 'n', 'u', 'l', 'l' };
-    char buf[sizeof(ok)];
+    static char buf[sizeof(ok)];
 
     size_t n_read = fread(buf, sizeof(char), sizeof(ok), fp);
 
@@ -304,7 +321,7 @@ bool read_boolean(FILE* fp)
     static const char t[] = { 't', 'r', 'u', 'e' };
     static const char f[] = { 'f', 'a', 'l', 's', 'e' };
 
-    char buf[sizeof(f)] = { 0 };
+    static char buf[sizeof(f)] = { 0 };
 
     size_t n_read = fread(buf, sizeof(char), sizeof(f), fp);
 
