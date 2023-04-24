@@ -10,7 +10,7 @@ COMPILER ?= gcc
 CC := gcc
 
 # -fsanitize={address,undefined}
-CFLAGS.gcc.debug := -Og -ggdb -fanalyzer -DBACKTRACE -rdynamic -fsanitize=address
+CFLAGS.gcc.debug := -Og -ggdb -fanalyzer -DBACKTRACE -rdynamic -fsanitize=address -fno-omit-frame-pointer
 CFLAGS.gcc.release := -O3 -march=native -DNDEBUG
 CFLAGS.gcc := ${CFLAGS.gcc.${BUILD}} -Iinclude -W{all,extra,error} -fstack-protector-all -std=gnu11
 
