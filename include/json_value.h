@@ -2,9 +2,8 @@
 #ifndef _JSON_VALUE_H
 #define _JSON_VALUE_H
 
+#include "config.h"
 #include <stdbool.h> // bool
-
-#define OBJ_SIZE 32
 
 typedef struct obj_entry {
     char const* key;

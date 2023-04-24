@@ -1,5 +1,6 @@
 
 #include "util.h"
+#include "config.h"
 
 #include <err.h> // err
 #include <errno.h> // errno
@@ -7,8 +8,6 @@
 #include <stdarg.h> // va_list
 #include <stdio.h> // fprintf
 #include <stdlib.h> // malloc, realloc, calloc
-
-#define ERROR_CONTEXT_LEN 80
 
 void* malloc_or_die(size_t size)
 {

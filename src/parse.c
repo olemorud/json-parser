@@ -1,6 +1,7 @@
 
 #include "parse.h"
 
+#include "config.h"
 #include "json_value.h"
 #include "util.h"
 
@@ -9,10 +10,6 @@
 #include <stdio.h>
 #include <stdlib.h> // exit, EXIT_SUCCESS, EXIT_FAILURE
 #include <string.h> // strcmp
-
-#define EARLY_EOF 202
-#define MALLOC_DIE 201
-#define UNEXPECTED_CHAR 200
 
 char* read_string(FILE* fp);
 obj_t* read_object(FILE* fp);
