@@ -106,6 +106,7 @@ struct json_value parse_json_value(FILE* fp)
 
     default:
         if (isdigit(c)) {
+            ungetc(c, fp);
             result.type = number;
             result.number = read_number(fp);
         } else {
@@ -364,9 +365,18 @@ bool read_boolean(FILE* fp)
 */
 double read_number(FILE* fp)
 {
-    double n;
+    static const unsigned long neg_nan = 0xFFFFFFFFFFFFFFFFULL;
+    double n = *(double*)&neg_nan;
 
-    fscanf(fp, "%lf", &n);
+    int n_read = fscanf(fp, "%lf", &n);
+
+    /* try to read as long instead */
+    if (n_read == 0) {
+        err_ctx(UNEXPECTED_CHAR, fp, "(%s) number expected, found %lf", __func__, n);
+    }
+
+    if (n_read == EOF)
+        err_ctx(EARLY_EOF, fp, "(%s) unexpected EOF", __func__);
 
     return n;
 }

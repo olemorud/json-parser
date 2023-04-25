@@ -36,7 +36,7 @@ int main(int argc, char* argv[])
 
     struct json_value x = parse_json_value(fp);
 
-    print_json(x, 1);
+    // print_json(x, 1);
 
     json_value_delete(x);
 
