@@ -24,9 +24,9 @@ void print_object(obj_t obj, int cur_indent, int indent_amount);
     Returns a hash of the string `str`.
 
     It seems to work well because 33 is coprime to
-    2^32 and 2^64  (any odd number except 1 is),
+    2^32 and 2^64 (any odd number except 1 is),
     which probably improves the distribution  (I'm
-    not a mathematician so  I can't prove it this).
+    not a mathematician so  I can't prove this).
     Multiplying a number n by 33 is the same as
     bitshifting by 5 and adding n, which is faster
     than multiplying by, say, 37.  Maybe any 2^x±1
@@ -112,6 +112,9 @@ bool obj_insert(obj_t m, char* const key, struct json_value* value)
     return true;
 }
 
+/*
+    Free memory allocated for json_value val
+*/
 void json_value_delete(struct json_value val)
 {
     switch (val.type) {
@@ -140,7 +143,7 @@ void json_value_delete(struct json_value val)
 /*
     Free memory allocated for obj
 
-TODO: recurively delete children objects
+    Recursively deletes children objects
 */
 void obj_delete(obj_t* m)
 {

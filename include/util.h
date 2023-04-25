@@ -2,8 +2,8 @@
 #ifndef _UTIL_H
 #define _UTIL_H
 
-#include <stddef.h>
-#include <stdio.h>
+#include <stddef.h> // size_t
+#include <stdio.h> // FILE*
 
 __attribute__((__noreturn__)) void err_ctx(int exit_code, FILE* fp, const char* format, ...);
 
