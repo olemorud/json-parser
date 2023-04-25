@@ -90,10 +90,7 @@ bool obj_insert(obj_t m, char* const key, struct json_value* value)
 
     /* traverse linked list to end or until key is found */
     while (cur != NULL) {
-        if (cur->key == NULL)
-            err(EXIT_FAILURE, "entry without key");
-
-        if (strncmp(cur->key, key, strlen(key)) == 0)
+        if (strcmp(cur->key, key) == 0)
             break;
 
         cur = cur->next;
