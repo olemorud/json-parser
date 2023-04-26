@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "json_obj.h"
+#include "util.h"
 
 /*  djb2 string hash
     credits: Daniel J. Bernstein */
@@ -75,7 +76,7 @@ bool obj_insert(obj_t m, char* const key, struct json_value* value)
         return false;
 
     /* populate new entry */
-    cur = malloc(sizeof(struct obj_entry));
+    cur = malloc_or_die(sizeof(struct obj_entry));
     cur->key = strdup(key);
     cur->val = value;
     cur->next = m[i];

@@ -19,12 +19,23 @@ obj_t* read_object(FILE* fp);
 void discard_whitespace(FILE* fp);
 bool read_boolean(FILE* fp);
 void read_null(FILE* fp);
-int64_t read_number(FILE* fp);
+double read_number(FILE* fp);
 struct json_value** read_array(FILE* fp);
 
 void print_object(obj_t obj, int cur_indent, int indent_amount);
 void print_json_value(struct json_value val, int cur_indent, int indent_amount);
 void print_array(struct json_value** arr, int cur_indent, int indent_amount);
+
+// define as a macro to make debugging smoother
+#define discard_whitespace(fp)                                   \
+    do {                                                         \
+        int c;                                                   \
+        while (isspace(c = fgetc(fp))) {                         \
+            if (c == EOF)                                        \
+                err(EARLY_EOF, "(%s) unexpected EOF", __func__); \
+        }                                                        \
+        ungetc(c, fp);                                           \
+    } while (0);
 
 char* read_string(FILE* fp)
 {
@@ -56,70 +67,90 @@ char* read_string(FILE* fp)
     }
 }
 
-void discard_whitespace(FILE* fp)
-{
-    int c;
+/*
+   A JSON object is an unordered set of name/value pairs.
 
-    while (isspace(c = fgetc(fp)))
-        if (c == EOF)
-            err(EARLY_EOF, "(%s) unexpected EOF", __func__);
+   An object begins with "{" and ends with "}".
+   Each name is followed by ":" and the name/value pairs are separated by ",".
 
-    ungetc(c, fp);
-}
-
+   Consumes a JSON object from a file stream and returns a corresponding obj_t
+*/
 obj_t* read_object(FILE* fp)
 {
     obj_t* result = calloc_or_die(1, sizeof(obj_t));
     char* key;
-    struct json_value* val = calloc_or_die(1, sizeof(struct json_value));
-    int c;
 
     while (true) {
+        /* read key */
         discard_whitespace(fp);
 
-        if ((c = fgetc(fp)) == EOF)
+        switch (fgetc(fp)) {
+        case EOF:
             err(EARLY_EOF, "(%s) unexpected EOF", __func__);
 
-        if (c == '"')
+        default:
+            errx(UNEXPECTED_CHAR, "(%s) expected \" at index %zu", __func__, ftell(fp));
+
+        case '"':
             key = read_string(fp);
-        else if (c == '}')
-            return result;
+            break;
 
+        case '}':
+            return result;
+        }
+
+        /* check for ':' separator */
         discard_whitespace(fp);
 
-        if ((c = fgetc(fp)) == EOF)
+        switch (fgetc(fp)) {
+        case ':':
+            break;
+
+        case EOF:
             err(EARLY_EOF, "(%s) unexpected EOF", __func__);
 
-        if (c != ':')
-            errx(UNEXPECTED_CHAR, "(%s) expected separator (':') at index %zu",
-                __func__, ftell(fp));
+        default:
+            errx(UNEXPECTED_CHAR, "(%s) expected ':' at index %zu", __func__, ftell(fp));
+        }
 
+        /* read value */
         discard_whitespace(fp);
 
+        struct json_value* val = calloc_or_die(1, sizeof(struct json_value));
         *val = parse_json_value(fp);
 
-        bool ok = obj_insert(*result, key, val);
-
-        if (!ok)
+        /* insert key-value pair to obj */
+        if (!obj_insert(*result, key, val))
             err(EXIT_FAILURE, "failed to insert pair (%s, %p)", key, (void*)val);
 
+        /* read separator or end of object */
         discard_whitespace(fp);
 
-        if ((c = fgetc(fp)) == EOF)
+        switch (fgetc(fp)) {
+        case EOF:
             err(EARLY_EOF, "(%s) unexpected EOF", __func__);
 
-        if (c == ',')
+        case ',':
             continue;
-        else if (c == '}')
+
+        case '}':
             return result;
-        else
-            errx(UNEXPECTED_CHAR, "(%s) expected ',' or '}' at index %zu", __func__,
-                ftell(fp));
+
+        default:
+            errx(UNEXPECTED_CHAR, "(%s) expected ',' or '}' at index %zu", __func__, ftell(fp));
+        }
     }
 
     return NULL;
 }
 
+/*
+   A JSON array is an ordered collection of values.
+   It begins with "[" and ends with "]". Values are separated by ","
+
+   Consumes a JSON array from a file stream and returns
+   a NULL separated array of json_value pointers
+*/
 struct json_value** read_array(FILE* fp)
 {
     int c;
@@ -127,26 +158,32 @@ struct json_value** read_array(FILE* fp)
     struct json_value** output = malloc_or_die(output_size);
 
     while (true) {
-        c = fgetc(fp);
-
-        if (c == EOF)
-            err(EARLY_EOF, "(%s) unexpected EOF", __func__);
-
-        if (c == ']')
-            break;
-
-        if (c == ',')
-            continue;
-
-        ungetc(c, fp);
 
         if (i > output_size) {
             output_size *= 2;
             output = realloc_or_die(output, output_size);
         }
 
-        output[i] = malloc_or_die(sizeof(struct json_value));
-        *output[i] = parse_json_value(fp);
+        c = fgetc(fp);
+
+        switch (c) {
+        case EOF:
+            err(EARLY_EOF, "(%s) unexpected EOF", __func__);
+
+        case ']':
+            output[i] = NULL;
+            return realloc_or_die(output, i * sizeof(struct json_value*));
+
+        case ',':
+            continue;
+
+        default:
+            ungetc(c, fp);
+            output[i] = malloc_or_die(sizeof(struct json_value));
+            *output[i] = parse_json_value(fp);
+            break;
+        }
+
         i++;
     }
 
@@ -155,6 +192,12 @@ struct json_value** read_array(FILE* fp)
     return realloc_or_die(output, i * sizeof(void*));
 }
 
+/*
+    Consumes and discards a literal "null" from a file stream
+
+    If the next characters do not match "null"
+    it terminates the program with a non-zero code
+*/
 void read_null(FILE* fp)
 {
     static const char ok[] = { 'n', 'u', 'l', 'l' };
@@ -170,6 +213,13 @@ void read_null(FILE* fp)
             ftell(fp));
 }
 
+/*
+    JSON boolean values are either "true" or "false".
+
+    Consumes a JSON boolean from a file stream and returns true or false.
+
+    Terminates with a non-zero code if the next characters do not match these.
+*/
 bool read_boolean(FILE* fp)
 {
     static const char t[] = { 't', 'r', 'u', 'e' };
@@ -193,67 +243,72 @@ bool read_boolean(FILE* fp)
 }
 
 // TODO: fix int overflow
-int64_t read_number(FILE* fp)
+/*
+    A JSON number is very much like a C or Java number,
+    except that the octal and hexadecimal formats are not used.
+
+    Consumes a JSON number from a file stream and returns the number
+*/
+double read_number(FILE* fp)
 {
-    int c;
+    double n;
 
-    int64_t sum = 0;
+    fscanf(fp, "%lf", &n);
 
-    do {
-        c = fgetc(fp);
-
-        if (c == EOF)
-            err(EARLY_EOF, "(%s) unexpected EOF", __func__);
-
-        sum *= 10;
-        sum += c - '0';
-    } while (isdigit(c));
-
-    ungetc(c, fp);
-
-    return sum;
+    return n;
 }
 
+/*
+    A JSON value can be a JSON string in double quotes, or a JSON number,
+    or true or false or null, or a JOSN object or a JSON array.
+    These structures can be nested.
+*/
 struct json_value parse_json_value(FILE* fp)
 {
     discard_whitespace(fp);
     int c = fgetc(fp);
+
     struct json_value result = { 0 };
 
     switch (c) {
     case EOF:
         err(EARLY_EOF, "(%s) unexpected EOF", __func__);
+
     case '{':
         result.type = object;
         result.object = read_object(fp);
         break;
+
     case '"':
         result.type = string;
         result.string = read_string(fp);
         break;
+
     case '[':
         result.type = array;
         result.array = read_array(fp);
         break;
+
     case 't':
     case 'f':
         ungetc(c, fp);
         result.type = boolean;
         result.boolean = read_boolean(fp);
         break;
+
     case 'n':
         ungetc(c, fp);
         read_null(fp);
         result.type = null;
         result.number = 0L;
         break;
+
     default:
         if (isdigit(c)) {
             result.type = number;
             result.number = read_number(fp);
         } else {
-            errx(UNEXPECTED_CHAR, "(%s) unexpected symbol %c at index %zu", __func__,
-                c, ftell(fp) - 1);
+            errx(UNEXPECTED_CHAR, "(%s) unexpected symbol %c at index %zu", __func__, c, ftell(fp) - 1);
         }
     }
 
@@ -262,47 +317,58 @@ struct json_value parse_json_value(FILE* fp)
 
 void add_indent(int n)
 {
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < n; i++)
         putchar(' ');
-    }
 }
 
 void print_object(obj_t obj, int cur_indent, int indent_amount)
 {
-    printf("{");
+    putchar('{');
+
+    bool first = true;
 
     for (size_t i = 0; i < OBJ_SIZE; i++) {
         struct obj_entry* e = obj[i];
 
-        if (e == NULL)
-            continue;
-
         while (e != NULL) {
+            if (!first)
+                putchar(',');
+
+            first = false;
+
             putchar('\n');
             add_indent(cur_indent);
             printf("\"%s\": ", e->key);
             print_json_value(*(e->val), cur_indent + indent_amount, indent_amount);
-            putchar(',');
 
             e = e->next;
         }
     }
-    printf("\b"); // undo last comma
-    putchar('\n');
 
+    putchar('\n');
     add_indent(cur_indent - indent_amount * 2);
-    printf("}");
+    putchar('}');
 }
 
 void print_array(struct json_value** arr, int cur_indent, int indent_amount)
 {
     putchar('[');
 
-    for (size_t i = 0; arr[i] != NULL; i++) {
+    size_t i;
+
+    for (i = 0; arr[i + 1] != NULL; i++) {
+        putchar('\n');
+        add_indent(cur_indent);
         print_json_value(*arr[i], cur_indent + indent_amount, indent_amount);
         putchar(',');
     }
 
+    putchar('\n');
+    add_indent(cur_indent);
+    print_json_value(*arr[i], cur_indent + indent_amount, indent_amount);
+
+    putchar('\n');
+    add_indent(cur_indent - indent_amount * 2);
     putchar(']');
 }
 
@@ -336,5 +402,4 @@ void print_json_value(struct json_value val, int cur_indent,
 void print_json(struct json_value val, int indent)
 {
     print_json_value(val, 0, indent);
-    putchar('\n');
 }

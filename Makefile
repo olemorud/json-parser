@@ -1,8 +1,8 @@
 
 CC=gcc
-CFLAGS=-ggdb -O0
+CFLAGS=-ggdb -Og
 CFLAGS+=-Wextra -Wall -Wpedantic
-CFLAGS+=-fsanitize=address -fsanitize=undefined
+#CFLAGS+=-fsanitize=address -fsanitize=undefined
 CFLAGS+=-fanalyzer
 CFLAGS+=-rdynamic
 CFLAGS+=-Iinclude
