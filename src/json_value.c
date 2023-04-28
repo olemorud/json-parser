@@ -225,7 +225,7 @@ void print_array(struct json_value** arr, int cur_indent, int indent_amount)
         return;
     }
 
-    for (size_t i = 0; arr[i + 1] != NULL; i++) {
+    for (size_t i = 0; arr[i] != NULL; i++) {
         putchar('\n');
         add_indent(cur_indent);
         print_json_value(*arr[i], cur_indent + indent_amount, indent_amount);

@@ -21,3 +21,6 @@ jobs:
 
     - name: Run tests
       run: ./test.sh
+
+    - name: Test output against jq
+      run: ./bin/release/parse sample-files/large-file.json | jq >/dev/null
