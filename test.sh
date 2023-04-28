@@ -21,7 +21,7 @@ for file in sample-files/*.json; do
 
     echo -n "(debug) testing with $file: "
 
-    time_cmd ./bin/debug/parse $file 2>$stderr_output
+    time_cmd ./bin/debug/parse $file 1>/dev/null 2>$stderr_output
 
     result=$?
 
@@ -49,7 +49,7 @@ for file in sample-files/*.json; do
 
     echo -n "(release) testing with $file: "
 
-    time_cmd ./bin/release/parse $file 2>$stderr_output
+    time_cmd ./bin/release/parse $file 1>/dev/null 2>$stderr_output
 
     result=$?
 
