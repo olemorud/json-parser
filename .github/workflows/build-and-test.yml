@@ -1,0 +1,23 @@
+name: Build and test
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: make (BUILD=debug)
+      run: make
+
+    - name: make (BUILD=release)
+      run: make BUILD=release
+
+    - name: Run tests
+      run: ./test.sh
