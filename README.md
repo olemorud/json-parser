@@ -7,21 +7,20 @@ Not guaranteed to be safe, reliable or efficient.
 ## Usage
 
 ###  Compile
+
 build (release build):
+
 ```sh
 make BUILD=release
 ```
+
 To make a debug build just run `make`.
 
 ### Run
 
 ```sh
-./bin/{release|debug}/json_parser sample.json
+./bin/release/json_parser  sample-files/large-file.json
 ```
-
-## Limitations
-
-Does not support unicode.
 
 ## Implementation
 
@@ -38,19 +37,28 @@ struct json_value {
         struct json_value** array;
         char*               string;
         bool                boolean;
-        int64_t             number;
+        double              number;
     };
 };
 ```
 
 ### Types
 
+#### JSON Objects
+
+Object values have the type field set to `(enum json_type) object`
+
+They are stored using a poorly written map implementation with the type `obj_t`
+in `json_value.object`
+
+See [obj_t](#obj_t) for more details.
+
 #### JSON Arrays
 
 Array values have the type field set to `(enum json_type) array`
 
 JSON Arrays are stored as null-terminated `json_value*` arrays,
-`struct json_value**`, in `json_value.array`
+i.e. `struct json_value**`, in `json_value.array`
 
 
 #### JSON Numbers
@@ -82,15 +90,9 @@ The values are stored as `bool` in `json_value.boolean`
 Null values have type field set to `(enum json_type) null`.
 
 
-#### JSON Objects
+### obj\_t
 
-Object values have the type field set to `(enum json_type) object`
-
-They are stored using a poorly written map implementation with the type `obj_t`
-in `json_value.object`
-
-##### obj\_t
-
+`obj_t` is defined in `json_value.h` as:
 ```c
 typedef struct obj_entry {
     char const* key;
@@ -101,7 +103,7 @@ typedef struct obj_entry {
 typedef __p_obj_entry obj_t[OBJ_SIZE]; // OBJ_SIZE=1024
 ```
 
-##### obj\_t methods
+#### obj\_t methods
 
 `void* obj_at(obj_t m, char* key)`
 
@@ -113,5 +115,5 @@ Insert a key-value pair
 
 `void obj_delete(obj_t m)`
 
-Free memory allocated for object
+Recursively free memory allocated for object and children objects.
 
