@@ -19,7 +19,7 @@ To make a debug build just run `make`.
 ### Run
 
 ```sh
-./bin/{release|debug}/json_parser sample-files/large-file.json
+./bin/release/json_parser  sample-files/large-file.json
 ```
 
 ## Implementation
