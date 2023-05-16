@@ -1,4 +1,5 @@
 -Iinclude
+-Iarena-allocator/include
 -Wall
 -Werror
 -Wpedantic

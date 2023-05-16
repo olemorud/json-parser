@@ -1,0 +1,3 @@
+[submodule "arena-allocator"]
+	path = arena-allocator
+	url = https://github.com/olemorud/arena-allocator.git
