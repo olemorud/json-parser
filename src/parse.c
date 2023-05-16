@@ -20,24 +20,37 @@
 
 #include "parse.h"
 
+#include "arena.h"
 #include "config.h"
 #include "json_value.h"
 #include "util.h"
 
 #include <ctype.h> // isspace, isdigit
 #include <err.h> // err, errx
+#include <math.h> // NAN
 #include <stdio.h>
 #include <stdlib.h> // exit, EXIT_SUCCESS, EXIT_FAILURE
 #include <string.h> // strcmp
 
-char* read_string(FILE* fp);
-obj_t* read_object(FILE* fp);
-void discard_whitespace(FILE* fp);
 bool read_boolean(FILE* fp);
-void read_null(FILE* fp);
+char* read_string(FILE* fp, arena_t* arena);
 double read_number(FILE* fp);
-struct json_value** read_array(FILE* fp);
+obj_t* read_object(FILE* fp, arena_t* arena);
+struct json_value** read_array(FILE* fp, arena_t* arena);
 void discard_whitespace(FILE* fp);
+void read_null(FILE* fp);
+
+/*
+ghetto way to hunt down bugs
+#ifdef __GNUC__
+   #define _fgetc(fp) \
+       ({int retval; retval = fgetc(fp); fputc(retval, stderr); retval;})
+#else
+   #define _fgetc(fp) \
+       fgetc(fp)
+#endif
+*/
+#define _fgetc(fp) fgetc(fp)
 
 /*
     Consumes the next whitespace character in a file stream
@@ -47,7 +60,7 @@ void discard_whitespace(FILE* fp)
 {
     int c;
 
-    while (isspace(c = fgetc(fp))) {
+    while (isspace(c = _fgetc(fp))) {
         if (c == EOF)
             err_ctx(EARLY_EOF, fp, "(%s) unexpected EOF", __func__);
     }
@@ -64,10 +77,10 @@ void discard_whitespace(FILE* fp)
 
     These structures can be nested.
 */
-struct json_value parse_json_value(FILE* fp)
+struct json_value parse_json_value(FILE* fp, arena_t* arena)
 {
     discard_whitespace(fp);
-    int c = fgetc(fp);
+    int c = _fgetc(fp);
 
     struct json_value result = { 0 };
 
@@ -77,17 +90,17 @@ struct json_value parse_json_value(FILE* fp)
 
     case '{':
         result.type = object;
-        result.object = read_object(fp);
+        result.object = read_object(fp, arena);
         break;
 
     case '"':
         result.type = string;
-        result.string = read_string(fp);
+        result.string = read_string(fp, arena);
         break;
 
     case '[':
         result.type = array;
-        result.array = read_array(fp);
+        result.array = read_array(fp, arena);
         break;
 
     case 't':
@@ -127,21 +140,26 @@ struct json_value parse_json_value(FILE* fp)
 
     Consumes a JSON string from a file stream and returns a corresponding char*
 */
-char* read_string(FILE* fp)
+char* read_string(FILE* fp, arena_t* arena)
 {
     int c;
     size_t i = 0, result_size = 16;
-    char* result = malloc_or_die(result_size);
+    // char* result = malloc_or_die(result_size);
+    char* result = arena_alloc(arena, result_size);
 
     bool escaped = false;
 
     while (true) {
         if (i + 1 >= result_size) {
             result_size *= 2;
-            result = realloc_or_die(result, result_size);
+            result = arena_realloc_tail(arena, result_size);
+            if (result == NULL)
+                err_ctx(EXIT_FAILURE, fp, "could not allocate memory for string"
+                                          "%s",
+                    __func__);
         }
 
-        c = fgetc(fp);
+        c = _fgetc(fp);
 
         if (escaped) {
             escaped = false;
@@ -155,10 +173,9 @@ char* read_string(FILE* fp)
 
             case '"':
                 result[i++] = '\0';
-                return realloc_or_die(result, i);
+                return arena_realloc_tail(arena, i);
 
             case EOF:
-                free(result);
                 err_ctx(EARLY_EOF, fp, "(%s) unexpected EOF", __func__);
 
             default:
@@ -177,26 +194,25 @@ char* read_string(FILE* fp)
 
    Consumes a JSON object from a file stream and returns a corresponding obj_t
 */
-obj_t* read_object(FILE* fp)
+obj_t* read_object(FILE* fp, arena_t* arena)
 {
-    obj_t* result = calloc_or_die(1, sizeof(obj_t));
+    // obj_t* result = calloc_or_die(1, sizeof(obj_t));
+    obj_t* result = arena_calloc(arena, 1, sizeof *result);
     char* key;
 
     while (true) {
         /* read key */
         discard_whitespace(fp);
 
-        switch (fgetc(fp)) {
+        switch (_fgetc(fp)) {
         case EOF:
-            free(result);
             err_ctx(EARLY_EOF, fp, "(%s) unexpected EOF", __func__);
 
         default:
-            free(result);
             err_ctx(UNEXPECTED_CHAR, fp, "(%s) expected \"", __func__);
 
         case '"':
-            key = read_string(fp);
+            key = read_string(fp, arena);
             break;
 
         case '}':
@@ -206,39 +222,35 @@ obj_t* read_object(FILE* fp)
         /* check for ':' separator */
         discard_whitespace(fp);
 
-        switch (fgetc(fp)) {
+        switch (_fgetc(fp)) {
         case ':':
             break;
 
         case EOF:
-            free(result);
             err_ctx(EARLY_EOF, fp, "(%s) unexpected EOF", __func__);
 
         default:
-            free(result);
             err_ctx(UNEXPECTED_CHAR, fp, "(%s) expected ':'", __func__);
         }
 
         /* read value */
         discard_whitespace(fp);
 
-        struct json_value* val = calloc_or_die(1, sizeof(struct json_value));
-        *val = parse_json_value(fp);
+        // struct json_value* val = calloc_or_die(1, sizeof(struct json_value));
+        struct json_value* val = arena_calloc(arena, 1, sizeof *val);
+        *val = parse_json_value(fp, arena);
 
         /* insert key-value pair to obj */
-        if (!obj_insert(*result, key, val)) {
-            free(result);
-            free(val);
-            errx(EXIT_FAILURE, "failed to insert pair (%s, %p)", key, (void*)val);
+        if (!obj_insert(*result, key, val, arena)) {
+            fprintf(stderr, "failed to insert pair (%s, %p)\n", key, (void*)val);
+            exit(EXIT_FAILURE);
         }
 
         /* read separator or end of object */
         discard_whitespace(fp);
 
-        switch (fgetc(fp)) {
+        switch (_fgetc(fp)) {
         case EOF:
-            free(val);
-            free(result);
             err_ctx(EARLY_EOF, fp, "(%s) unexpected EOF", __func__);
 
         case ',':
@@ -248,8 +260,6 @@ obj_t* read_object(FILE* fp)
             return result;
 
         default:
-            free(val);
-            free(result);
             err_ctx(UNEXPECTED_CHAR, fp, "(%s) expected ',' or '}'", __func__);
         }
     }
@@ -264,42 +274,43 @@ obj_t* read_object(FILE* fp)
    Consumes a JSON array from a file stream and returns
    a NULL separated array of json_value pointers
 */
-struct json_value** read_array(FILE* fp)
+struct json_value** read_array(FILE* fp, arena_t* arena)
 {
     int c;
     size_t i = 0, output_size = 16;
-    struct json_value** output = malloc_or_die(output_size * sizeof(struct json_value*));
+    struct json_value** output = malloc_or_die(output_size * sizeof *output);
+    // struct json_value** output = arena_alloc(arena, output_size * sizeof *output);
 
     while (true) {
-        if (i + 1 >= output_size) {
+        if (i >= output_size) {
             output_size *= 2;
-            output = realloc_or_die(output, output_size * sizeof(struct json_value*));
+            // output = arena_realloc_tail(arena, output_size * sizeof *output);
+            output = realloc_or_die(output, output_size * sizeof *output);
         }
 
         discard_whitespace(fp);
-        c = fgetc(fp);
+        c = _fgetc(fp);
 
         switch (c) {
         case EOF:
-            free(output);
-
-            for (size_t j = 0; j < i; j++)
-                free(output[j]);
-
             err_ctx(EARLY_EOF, fp, "(%s) unexpected EOF", __func__);
             break;
 
         case ']':
             output[i++] = NULL;
-            return realloc_or_die(output, i * sizeof(struct json_value*));
+            struct json_value** x = arena_alloc(arena, i * sizeof *output);
+            memcpy(x, output, i * sizeof *output);
+            free(output);
+            return x;
 
         case ',':
             continue;
 
         default:
             ungetc(c, fp);
-            output[i] = malloc_or_die(sizeof(struct json_value));
-            *output[i] = parse_json_value(fp);
+            // output[i] = malloc_or_die(sizeof(struct json_value));
+            output[i] = arena_alloc(arena, sizeof *(output[i]));
+            *output[i] = parse_json_value(fp, arena);
             i++;
             break;
         }
@@ -365,15 +376,12 @@ bool read_boolean(FILE* fp)
 */
 double read_number(FILE* fp)
 {
-    static const unsigned long neg_nan = 0xFFFFFFFFFFFFFFFFULL;
-    double n = *(double*)&neg_nan;
+    double n = NAN;
 
     int n_read = fscanf(fp, "%lf", &n);
 
-    /* try to read as long instead */
-    if (n_read == 0) {
+    if (n_read == 0)
         err_ctx(UNEXPECTED_CHAR, fp, "(%s) number expected, found %lf", __func__, n);
-    }
 
     if (n_read == EOF)
         err_ctx(EARLY_EOF, fp, "(%s) unexpected EOF", __func__);

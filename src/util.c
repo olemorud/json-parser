@@ -42,13 +42,12 @@ void* realloc_or_die(void* ptr, size_t size)
 {
     void* tmp = realloc(ptr, size);
 
-    if (ptr == NULL) {
+    if (tmp == NULL) {
         if (errno != 0) {
-            free(ptr);
             err(errno, "realloc_or_die failed");
         }
 
-        fprintf(stderr, "\nrealloc_or_die returned NULL but errno is 0, ptr: %p size: %zu\n", ptr, size);
+        fprintf(stderr, "\nrealloc_or_die returned NULL but errno is 0, ptr: %p size: %zu\n", tmp, size);
         exit(EXIT_FAILURE);
     }
 
@@ -67,9 +66,11 @@ void* calloc_or_die(size_t nmemb, size_t size)
 
 // from the glibc man pages
 // https://www.gnu.org/software/libc/manual/html_node/Backtraces.html
-void print_trace()
+void print_trace(void)
 {
-#ifdef BACKTRACE
+#ifndef BACKTRACE
+    return;
+#else
     void* array[500];
     char** strings;
     int size, i;
@@ -79,8 +80,9 @@ void print_trace()
 
     if (strings != NULL) {
         printf("\n\n=== Obtained %d stack frames. === \n", size);
-        for (i = 0; i < size; i++)
+        for (i = 0; i < size; i++) {
             printf("%s\n", strings[i]);
+        }
     }
 
     free(strings);

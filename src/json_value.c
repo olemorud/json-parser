@@ -23,13 +23,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "arena.h"
 #include "json_value.h"
 #include "util.h"
 
-bool obj_insert(obj_t m, char* const key, struct json_value* value);
 size_t obj_hash(char const* str);
-void obj_delete(obj_t* m);
-void* obj_at(obj_t m, char* const key);
 
 void print_array(struct json_value** arr, int cur_indent, int indent_amount);
 void print_json_value(struct json_value val, int cur_indent, int indent_amount);
@@ -95,7 +93,7 @@ void* obj_at(obj_t m, char* const key)
    returns true if successful
    returns false if key already exists
 */
-bool obj_insert(obj_t m, char* const key, struct json_value* value)
+bool obj_insert(obj_t m, char* const key, struct json_value* value, arena_t* arena)
 {
     size_t i = obj_hash(key);
     struct obj_entry* cur = m[i];
@@ -119,7 +117,7 @@ bool obj_insert(obj_t m, char* const key, struct json_value* value)
         return false;
 
     /* populate new entry */
-    cur = malloc_or_die(sizeof(struct obj_entry));
+    cur = arena_alloc(arena, sizeof *cur);
     cur->key = key;
     cur->val = value;
     cur->next = m[i];
@@ -133,24 +131,24 @@ bool obj_insert(obj_t m, char* const key, struct json_value* value)
 /*
     Free memory allocated for json_value val
 */
-void json_value_delete(struct json_value val)
+void json_value_delete(struct json_value val, arena_t* arena)
 {
     switch (val.type) {
     case array:
         for (size_t i = 0; val.array[i] != NULL; i++) {
-            json_value_delete(*(val.array[i]));
-            free(val.array[i]);
+            json_value_delete(*(val.array[i]), arena);
+            arena_free(arena, val.array[i]);
         }
 
-        free(val.array);
+        arena_free(arena, val.array);
         break;
 
     case object:
-        obj_delete(val.object);
+        obj_delete(val.object, arena);
         break;
 
     case string:
-        free(val.string);
+        arena_free(arena, val.string);
         break;
 
     default:
@@ -159,26 +157,27 @@ void json_value_delete(struct json_value val)
 }
 
 /*
-    Free memory allocated for obj
+    Recursively deletes object and its children
 
-    Recursively deletes children objects
+    Included for completeness. To efficiently delete an object, reset
+    its associated arena instead.
 */
-void obj_delete(obj_t* m)
+void obj_delete(obj_t* m, arena_t* arena)
 {
     for (size_t i = 0; i < OBJ_SIZE; i++) {
         struct obj_entry *e = (*m)[i], *tmp;
 
         while (e != NULL) {
-            json_value_delete(*(e->val));
-            free((char*)e->key);
-            free(e->val);
+            json_value_delete(*(e->val), arena);
+            arena_free(arena, (char*)e->key);
+            arena_free(arena, e->val);
 
             tmp = e;
             e = e->next;
-            free(tmp);
+            arena_free(arena, tmp);
         }
     }
-    free(m);
+    arena_free(arena, m);
 }
 
 void add_indent(int n)
