@@ -1,3 +1,5 @@
 *.o
-obj/
+*.so
+*.a
+.obj/
 bin/
