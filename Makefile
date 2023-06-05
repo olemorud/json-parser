@@ -38,7 +38,7 @@ all : $(BUILD_DIR)/parse
 $(BUILD_DIR)/parse : $(OBJS) $(OBJ_DIR)/libarena.a | $(BUILD_DIR) Makefile
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) $(LDLIBS) -o $@
 
-$(OBJ_DIR)/main.o : src/main.c arena-allocator | $(OBJ_DIR) Makefile
+$(OBJ_DIR)/%.o : src/%.c $(wildcard include/%.h) | $(OBJ_DIR) Makefile arena-allocator
 	$(CC) $(CFLAGS) $(LDFLAGS) $(LDLIBS) -c $< -o $@
 
 $(OBJ_DIR)/libarena.a : arena-allocator .gitmodules $(wildcard .git/modules/arena-allocator/HEAD) | $(OBJ_DIR) Makefile
@@ -48,9 +48,6 @@ $(OBJ_DIR)/libarena.a : arena-allocator .gitmodules $(wildcard .git/modules/aren
 arena-allocator : .gitmodules
 	git submodule update $@
 
-$(OBJ_DIR)/%.o : src/%.c include/%.h | $(OBJ_DIR) Makefile
-	$(CC) $(CFLAGS) $(LDFLAGS) $(LDLIBS) -c $< -o $@
-
 $(BUILD_DIR) :
 	mkdir -p $@
 
@@ -58,6 +55,6 @@ $(OBJ_DIR) :
 	mkdir -p $@
 
 clean :
-	rm -rfi $(OBJ_DIR) $(BUILD_DIR)
+	rm -rf $(OBJ_DIR) $(BUILD_DIR) arena-allocator
 
 .PHONY : clean all
