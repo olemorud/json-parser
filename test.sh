@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/zsh
 
 # Build debug (./bin/release/parse)
 # make -B 
@@ -64,5 +64,14 @@ for file in sample-files/*.json; do
     echo ""
 done
 
+# compare with python JSON.load()
+stderr_output=$(mktemp)
+echo -n "(release) comparing with python: "
+time_cmd python3 <<EOS 1>/dev/null 2>$stderr_output
+import json
+print(json.load(open("sample-files/large-file.json")))
+EOS
+
+cat $stderr_output
 
 exit $ok
