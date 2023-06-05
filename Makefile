@@ -10,15 +10,15 @@ COMPILER ?= gcc
 CC := gcc
 
 # -fsanitize={address,undefined}
-CFLAGS.gcc.debug := -Og -ggdb -DBACKTRACE -rdynamic -fanalyzer -fsanitize=address -fno-omit-frame-pointer
+CFLAGS.gcc.debug := -Og -ggdb -pg -DBACKTRACE -rdynamic -fsanitize=address -fno-omit-frame-pointer
 CFLAGS.gcc.release := -O3 -g -march=native -DNDEBUG
-CFLAGS.gcc := ${CFLAGS.gcc.${BUILD}} -fstack-protector-all -std=gnu11 #-Wpedantic
+CFLAGS.gcc := -fanalyzer
 
-CFLAGS.clang.debug=-O0 -g3 -DBACKTRACE -rdynamic
-CFLAGS.clang.release=-O3 -g -march=native -DNDEBUG
-CFLAGS.clang=-Iinclude -Wno-strict-aliasing -fstack-protector-all ${CFLAGS.clang.${BUILD}}
+CFLAGS.clang.debug := -O0 -g3 -DBACKTRACE -rdynamic
+CFLAGS.clang.release := -O3 -g -march=native -DNDEBUG
+CFLAGS.clang := ${CFLAGS.clang.${BUILD}}
 
-CFLAGS := ${CFLAGS.${COMPILER}} \
+CFLAGS := ${CFLAGS.${COMPILER}} ${CFLAGS.${COMPILER}.${BUILD}} \
 		  -Iinclude -Iarena-allocator/include \
 		  -std=c2x \
 		  -Wall -Wextra -Wpedantic -Werror
